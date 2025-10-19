@@ -1,0 +1,3 @@
+TITLE=DeltaGreentoDocX
+DEFAULT_SPEAKER=Gamemaster
+PRINT2PDF=YES

@@ -1,0 +1,8 @@
+Naming convention for .json files is as follows:
+
+session_1.json
+session_2.json
+
+etc.
+
+Uses Vauxs' Archives module.

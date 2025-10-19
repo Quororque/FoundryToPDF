@@ -1,0 +1,4 @@
+Gamemaster=ExampleX
+Player1=ExampleY
+Player2=ExampleZ
+
