@@ -92,10 +92,16 @@ CONFIG = {
     "OMIT_BLIND_GM_ROLLS": "YES",
     "OMIT_SELF_ROLLS": "YES",
     "OMIT_PUBLIC_ROLLS": "NO",
+
+    # NEW — sender & phrase omission
+    "OMIT_SYSTEM_SENDERS": "NO",
+    "SYSTEM_SENDERS": "",
+    "OMIT_INITIATIVE_ROLLS": "NO",
+    "INITIATIVE_PHRASE": "rolls for Initiative!",
 }
 
-ACTORS = {}  # speaker -> username
-DELETED_DUPLICATES = []  # list of (session_index, session_title, [(reason, speaker, message)])
+ACTORS = {}
+DELETED_DUPLICATES = []
 SESSION_DATES = []
 
 # -------------------- Logging (plain) --------------------
@@ -201,6 +207,11 @@ def get_font_size_pt(key, default=12):
 def is_yes(key):
     return CONFIG.get(key, "NO").strip().upper() == "YES"
 
+# NEW helper
+def get_list_config(key):
+    raw = CONFIG.get(key, "")
+    return [v.strip() for v in raw.split(",") if v.strip()]
+
 # -------------------- DOCX helpers --------------------
 def set_margins(section):
     section.top_margin = Cm(PAGE_MARGIN_CM)
@@ -301,29 +312,70 @@ def add_cast_section(doc):
 
 # -------------------- Message formatting --------------------
 def add_styled_paragraph(doc, content, style=0, speaker=None):
+    """
+    Adds a chat message as a styled paragraph to the DOCX.
+    Respects <em>/<i> for italics and <strong>/<b> for bold within HTML content.
+    Style (1 or 2) no longer forces italics.
+    Keyword highlighting for 'Success', 'Failure', etc. is preserved.
+    """
     if not speaker:
         speaker = CONFIG.get("DEFAULT_SPEAKER", "Handler")
+
+    # Create paragraph and apply default formatting
     p = doc.add_paragraph()
     paragraph_defaults(p)
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    run_s = p.add_run(f"{speaker}: "); run_s.bold = True
+
+    # Speaker name (bold)
+    run_s = p.add_run(f"{speaker}: ")
+    run_s.bold = True
     run_s.font.name = CONFIG.get("FONT_BODY", "Times New Roman")
     run_s.font.size = get_font_size_pt("FONT_SIZE_BODY", 12)
     run_s.font.color.rgb = hex_to_rgbcolor(CONFIG.get("COLOR_BODY", "000000"))
-    # content runs with keyword highlighting for criticals
-    keywords_pattern = re.compile(r"(Critical Success|Critical Failure|Success|Failure)", re.IGNORECASE)
-    parts = keywords_pattern.split(content)
-    for part in parts:
-        if not part:
-            continue
-        r = p.add_run(part)
-        r.font.name = CONFIG.get("FONT_BODY", "Times New Roman")
-        r.font.size = get_font_size_pt("FONT_SIZE_BODY", 12)
-        r.font.color.rgb = hex_to_rgbcolor(CONFIG.get("COLOR_BODY", "000000"))
-        if keywords_pattern.fullmatch(part):
-            r.bold = True
-        elif style == 1:
-            r.italic = True
+
+    # Keyword regex (success, failure, etc.)
+    keywords_pattern = re.compile(r"(Critical Success|Critical Failure|Success|Failure)",
+                                  re.IGNORECASE)
+
+    # Parse HTML so that <em>, <strong>, etc. are preserved
+    from bs4 import BeautifulSoup, NavigableString
+    soup = BeautifulSoup(content or "", "html.parser")
+
+    def emit_text_runs(node):
+        for child in node.children:
+            if isinstance(child, NavigableString):
+                text = str(child)
+                if not text.strip():  # Ignore empty/whitespace-only
+                    continue
+
+                # Create run for this text node
+                r = p.add_run(text)
+                r.font.name = CONFIG.get("FONT_BODY", "Times New Roman")
+                r.font.size = get_font_size_pt("FONT_SIZE_BODY", 12)
+                r.font.color.rgb = hex_to_rgbcolor(CONFIG.get("COLOR_BODY", "000000"))
+
+                # Detect parent HTML tags to apply formatting
+                parent_tags = [ancestor.name for ancestor in child.parents if getattr(ancestor, "name", None)]
+
+                # Italics if wrapped in <em> or <i>
+                if any(t in ("em", "i") for t in parent_tags):
+                    r.italic = True
+
+                # Bold if wrapped in <strong> or <b>
+                if any(t in ("strong", "b") for t in parent_tags):
+                    r.bold = True
+
+                # Also bold keywords like "Critical Success"
+                if keywords_pattern.fullmatch(text.strip()):
+                    r.bold = True
+
+            else:
+                # If this is another HTML tag, process its children
+                emit_text_runs(child)
+
+    # Process the parsed HTML content
+    emit_text_runs(soup)
+
 
 # -------------------- Roll extraction --------------------
 def extract_roll_info(msg):
@@ -469,6 +521,25 @@ def process_file(filepath, doc, session_index, is_first_session=False):
         if not cleaned:
             last_key = None
             continue
+
+        # NEW — sender-based omission
+        if is_yes("OMIT_SYSTEM_SENDERS"):
+            speaker_alias = (msg.get("speaker") or {}).get("alias") or CONFIG.get("DEFAULT_SPEAKER", "Handler")
+            if speaker_alias in get_list_config("SYSTEM_SENDERS"):
+                removed_list.append(("SYSTEM_SENDER", speaker_alias, cleaned))
+                continue
+
+        # NEW — initiative phrase omission (exact)
+        if is_yes("OMIT_INITIATIVE_ROLLS"):
+            phrase = CONFIG.get("INITIATIVE_PHRASE", "")
+            if phrase and phrase in cleaned:
+                removed_list.append((
+                    "INITIATIVE_ROLL",
+                    (msg.get("speaker") or {}).get("alias") or CONFIG.get("DEFAULT_SPEAKER", "Handler"),
+                    cleaned
+                ))
+                continue
+
 
         # AFK omission (moved up, runs first)
         if omit_afk and afk_re.search(cleaned):

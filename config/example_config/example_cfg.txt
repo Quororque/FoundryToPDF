@@ -1,11 +1,12 @@
 TITLE = Title
-DEFAULT_SPEAKER = Handler
+DEFAULT_SPEAKER = Gamemaster
 PRINT2PDF = YES
 
 # Fonts
 FONT_TITLE = Times New Roman
 FONT_CAST = Times New Roman
 FONT_HEADER = Times New Roman
+FONT_SUBHEADER = Times New Roman
 FONT_BODY = Times New Roman
 FONT_PAGE_NUMBER = Times New Roman
 
@@ -13,6 +14,7 @@ FONT_PAGE_NUMBER = Times New Roman
 COLOR_TITLE = 000000
 COLOR_CAST = 000000
 COLOR_HEADER = 000000
+COLOR_SUBHEADER = 000000
 COLOR_BODY = 000000
 COLOR_PAGE_NUMBER = 000000
 
@@ -41,3 +43,16 @@ OMIT_PRIVATE_GM_ROLLS = YES
 OMIT_BLIND_GM_ROLLS = YES
 OMIT_SELF_ROLLS = YES
 OMIT_PUBLIC_ROLLS = NO
+
+# --------------------------------------------------
+# NEW: System / automation sender filtering
+# --------------------------------------------------
+OMIT_SYSTEM_SENDERS = YES
+SYSTEM_SENDERS = Turn Tracker, Condition Changes, Bleeding Tracker, Physical Damage, Mental Exhaustion, Physical Healing, Mental Recovery
+
+# --------------------------------------------------
+# NEW: Initiative spam filtering
+# --------------------------------------------------
+OMIT_INITIATIVE_ROLLS = YES
+INITIATIVE_PHRASE = rolls for Initiative!
+
