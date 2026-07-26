@@ -41,6 +41,7 @@ EXPORT_DIR = "./export"
 OMITTED_DIR = os.path.join(EXPORT_DIR, "omitted")
 PORTRAITS_DIR = "portraits"
 ANONYMOUS_ACTORS = {}
+WORDFILTER = {}
 
 PORTRAIT_WIDTH_INCH = 0.75
 LEFT_CELL_WIDTH_INCH = 1.5
@@ -123,6 +124,27 @@ def load_config():
             k, v = line.split("=", 1)
             CONFIG[k.strip().upper()] = v.strip()
     log_done(f"Loaded configuration from {CONFIG_FILE}")
+
+def load_wordfilter():
+    path = os.path.join(CONFIG_DIR, "wordfilter.txt")
+
+    if not os.path.exists(path):
+        log(f"No {path} found.")
+        return
+
+    count = 0
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            source, replacement = line.split("=", 1)
+            WORDFILTER[source.strip()] = replacement.strip()
+            count += 1
+
+    log_done(f"Loaded {count} word filters.")
 
 def load_actors():
     if not os.path.exists(ACTORS_FILE):
@@ -236,10 +258,19 @@ def display_name(name):
 
 
 # NEW helper
+
 def get_list_config(key):
     raw = CONFIG.get(key, "")
     return [v.strip() for v in raw.split(",") if v.strip()]
+def apply_wordfilter(text):
+    if not text:
+        return text
 
+    for source, replacement in WORDFILTER.items():
+        pattern = re.compile(re.escape(source), re.IGNORECASE)
+        text = pattern.sub(replacement, text)
+
+    return text
 # -------------------- DOCX helpers --------------------
 def set_margins(section):
     section.top_margin = Cm(PAGE_MARGIN_CM)
@@ -547,6 +578,7 @@ def process_file(filepath, doc, session_index, is_first_session=False):
             continue
 
         cleaned = clean_html(raw)
+        cleaned = apply_wordfilter(cleaned)
         if not cleaned:
             last_key = None
             continue
@@ -615,7 +647,8 @@ def process_file(filepath, doc, session_index, is_first_session=False):
 
             # roll extraction special case
         roll_summary = extract_roll_info(msg)
-        if roll_summary:
+            if roll_summary:
+                roll_summary = apply_wordfilter(roll_summary)
             add_styled_paragraph(doc, roll_summary, style=0, speaker=speaker_alias)
             last_key = (speaker_alias.strip(), roll_summary.strip())
             continue
@@ -742,6 +775,7 @@ def main():
     if not os.path.exists(CONFIG_DIR):
         os.makedirs(CONFIG_DIR, exist_ok=True)
     load_config()
+    load_wordfilter()
     load_actors()
     load_anonymous_actors()
 

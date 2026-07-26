@@ -1,0 +1,4 @@
+Gamemaster=E-X
+Player1=E-Y
+Player2=E-Z
+
