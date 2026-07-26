@@ -40,6 +40,7 @@ ACTORS_FILE = os.path.join(CONFIG_DIR, "actors.txt")
 EXPORT_DIR = "./export"
 OMITTED_DIR = os.path.join(EXPORT_DIR, "omitted")
 PORTRAITS_DIR = "portraits"
+ANONYMOUS_ACTORS = {}
 
 PORTRAIT_WIDTH_INCH = 0.75
 LEFT_CELL_WIDTH_INCH = 1.5
@@ -138,6 +139,26 @@ def load_actors():
             count += 1
     log_done(f"Loaded {count} actors from {ACTORS_FILE}")
 
+def load_anonymous_actors():
+    path = os.path.join(CONFIG_DIR, "anonymous_actors.txt")
+
+    if not os.path.exists(path):
+        log(f"No {path} found.")
+        return
+
+    count = 0
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+
+            original, anonymous = line.split("=", 1)
+            ANONYMOUS_ACTORS[original.strip()] = anonymous.strip()
+            count += 1
+
+    log_done(f"Loaded {count} anonymous actor names.")
+
 # -------------------- Utilities --------------------
 def clean_html(content):
     soup = BeautifulSoup(content or "", "html.parser")
@@ -206,6 +227,13 @@ def get_font_size_pt(key, default=12):
 
 def is_yes(key):
     return CONFIG.get(key, "NO").strip().upper() == "YES"
+
+
+def display_name(name):
+    if is_yes("ANONYMOUS_MODE"):
+        return ANONYMOUS_ACTORS.get(name, name)
+    return name
+
 
 # NEW helper
 def get_list_config(key):
@@ -286,6 +314,7 @@ def add_cast_section(doc):
     run.font.color.rgb = hex_to_rgbcolor(CONFIG.get("COLOR_CAST", "000000"))
     paragraph_defaults(h)
     for speaker, username in ACTORS.items():
+        shown_name = display_name(speaker)
         table = doc.add_table(rows=1, cols=2)
         table.alignment = WD_TABLE_ALIGNMENT.LEFT
         table.autofit = False
@@ -302,7 +331,7 @@ def add_cast_section(doc):
                 log_fail(f"Could not insert portrait for {username}: {e}")
         p = c_text.paragraphs[0]
         paragraph_defaults(p)
-        r1 = p.add_run(f"{speaker} — "); r1.bold = True
+        r1 = p.add_run(f"{shown_name} — "); r1.bold = True
         r1.font.name = CONFIG.get("FONT_CAST", "Times New Roman"); r1.font.size = get_font_size_pt("FONT_SIZE_CAST", 12)
         r1.font.color.rgb = hex_to_rgbcolor(CONFIG.get("COLOR_CAST", "000000"))
         r2 = p.add_run(username)
@@ -524,7 +553,10 @@ def process_file(filepath, doc, session_index, is_first_session=False):
 
         # NEW — sender-based omission
         if is_yes("OMIT_SYSTEM_SENDERS"):
-            speaker_alias = (msg.get("speaker") or {}).get("alias") or CONFIG.get("DEFAULT_SPEAKER", "Handler")
+            speaker_alias = display_name(
+                (msg.get("speaker") or {}).get("alias")
+                or CONFIG.get("DEFAULT_SPEAKER", "Handler")
+            )
             if speaker_alias in get_list_config("SYSTEM_SENDERS"):
                 removed_list.append(("SYSTEM_SENDER", speaker_alias, cleaned))
                 continue
@@ -711,6 +743,7 @@ def main():
         os.makedirs(CONFIG_DIR, exist_ok=True)
     load_config()
     load_actors()
+    load_anonymous_actors()
 
     files = sorted(glob.glob(os.path.join(INPUT_DIR, "*.json")),
                    key=lambda x: int(re.search(r"(\d+)", os.path.basename(x)).group(1))
@@ -721,7 +754,10 @@ def main():
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     title_clean = re.sub(r"[^\w\s-]", "", CONFIG.get("TITLE", "FoundryVTT Session Transcript")).strip().replace(" ", "_")
-    output_filename = f"{title_clean}_{timestamp}.docx"
+    if is_yes("ANONYMOUS_MODE"):
+        output_filename = f"[Anonymized] {title_clean}_{timestamp}.docx"
+    else:
+        output_filename = f"{title_clean}_{timestamp}.docx"
     os.makedirs(EXPORT_DIR, exist_ok=True)
     output_path = os.path.join(EXPORT_DIR, output_filename)
 

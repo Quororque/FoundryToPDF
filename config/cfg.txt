@@ -1,6 +1,7 @@
 TITLE = Title
 DEFAULT_SPEAKER = Handler
 PRINT2PDF = YES
+ANONYMOUS_MODE = YES
 
 # Fonts
 FONT_TITLE = Times New Roman
