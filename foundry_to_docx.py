@@ -645,10 +645,10 @@ def process_file(filepath, doc, session_index, is_first_session=False):
         last_key = key
 
 
-            # roll extraction special case
+                    # roll extraction special case
         roll_summary = extract_roll_info(msg)
-            if roll_summary:
-                roll_summary = apply_wordfilter(roll_summary)
+        if roll_summary:
+            roll_summary = apply_wordfilter(roll_summary)
             add_styled_paragraph(doc, roll_summary, style=0, speaker=speaker_alias)
             last_key = (speaker_alias.strip(), roll_summary.strip())
             continue
